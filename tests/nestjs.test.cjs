@@ -80,7 +80,11 @@ test('the Nest adapter safely registers the global filter once in a conventional
 });
 
 test('the published Nest package is loadable as the configured integration module', () => {
-  const projectRoot = join(__dirname, '../../..');
+  // One level up from tests/ is this package's own root (package.json names
+  // "@ts-typed/nestjs" and has "exports"), so Node's self-reference
+  // resolution finds it directly — independent of whether this repository
+  // is standalone or hoisted inside a workspace.
+  const projectRoot = join(__dirname, '..');
 
   const resolution = resolveCoreProject({ projectRoot }, '@ts-typed/nestjs');
 
