@@ -1,0 +1,175 @@
+const assert = require('node:assert/strict');
+const { mkdtempSync, writeFileSync } = require('node:fs');
+const { tmpdir } = require('node:os');
+const { join } = require('node:path');
+const test = require('node:test');
+
+require('reflect-metadata');
+
+const { Controller, Get, Module, UseFilters } = require('@nestjs/common');
+const { NestFactory } = require('@nestjs/core');
+const { StrictTypeError } = require('@ts-typed/compiler');
+const { resolveProject: resolveCoreProject } = require('@ts-typed/compiler/integration');
+const {
+  nestjsIntegrationAdapter,
+  resolveProject,
+  StrictTypeErrorFilter,
+} = require('../dist');
+
+test('the Nest adapter resolves nest-cli tsConfigPath and honors explicit config', () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'ts-typed-nest-'));
+  writeFileSync(
+    join(projectRoot, 'nest-cli.json'),
+    JSON.stringify({ compilerOptions: { tsConfigPath: 'tsconfig.build.json' } }),
+  );
+
+  assert.equal(nestjsIntegrationAdapter.apiVersion, 1);
+  assert.equal(nestjsIntegrationAdapter.name, 'nestjs');
+  assert.equal(nestjsIntegrationAdapter.resolveProject, resolveProject);
+  assert.equal(typeof nestjsIntegrationAdapter.installGlobalStrictTypeErrorFilter, 'function');
+  assert.deepEqual(resolveProject({ projectRoot }), {
+    apiVersion: 1,
+    integration: 'nestjs',
+    projectRoot,
+    configPath: join(projectRoot, 'tsconfig.build.json'),
+  });
+  assert.deepEqual(resolveProject({ projectRoot, configPath: '/consumer/tsconfig.json' }), {
+    apiVersion: 1,
+    integration: 'nestjs',
+    projectRoot,
+    configPath: '/consumer/tsconfig.json',
+  });
+});
+
+test('the Nest adapter safely registers the global filter once in a conventional bootstrap', () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'ts-typed-nest-bootstrap-'));
+  const sourceRoot = join(projectRoot, 'src');
+  require('node:fs').mkdirSync(sourceRoot, { recursive: true });
+  writeFileSync(join(projectRoot, 'nest-cli.json'), JSON.stringify({ sourceRoot: 'src' }));
+  const mainPath = join(sourceRoot, 'main.ts');
+  writeFileSync(
+    mainPath,
+    [
+      "import { NestFactory } from '@nestjs/core';",
+      "import { AppModule } from './app.module';",
+      '',
+      'async function bootstrap(): Promise<void> {',
+      '  const app = await NestFactory.create(AppModule);',
+      '  await app.listen(process.env.PORT ?? 3000);',
+      '}',
+      'void bootstrap();',
+      '',
+    ].join('\n'),
+  );
+
+  const first = nestjsIntegrationAdapter.installGlobalStrictTypeErrorFilter({ projectRoot });
+  const configured = require('node:fs').readFileSync(mainPath, 'utf8');
+  const second = nestjsIntegrationAdapter.installGlobalStrictTypeErrorFilter({ projectRoot });
+
+  assert.deepEqual(first, {
+    changed: true,
+    message: 'Registered StrictTypeErrorFilter globally in src/main.ts.',
+  });
+  assert.match(configured, /import \{ StrictTypeErrorFilter \} from '@ts-typed\/nestjs';/);
+  assert.match(configured, /app\.useGlobalFilters\(new StrictTypeErrorFilter\(\)\);/);
+  assert.equal((configured.match(/StrictTypeErrorFilter/g) ?? []).length, 2);
+  assert.deepEqual(second, {
+    changed: false,
+    message: 'StrictTypeErrorFilter is already registered globally in src/main.ts.',
+  });
+});
+
+test('the published Nest package is loadable as the configured integration module', () => {
+  const projectRoot = join(__dirname, '../../..');
+
+  const resolution = resolveCoreProject({ projectRoot }, '@ts-typed/nestjs');
+
+  assert.deepEqual(resolution, {
+    apiVersion: 1,
+    integration: 'nestjs',
+    projectRoot,
+  });
+});
+
+test('the Nest error filter exposes only StrictTypeError safe metadata as HTTP 400', () => {
+  const exception = new StrictTypeError({
+    code: 'TYPE_MISMATCH',
+    contractKind: 'parameter',
+    propertyPath: 'CreateUserDto.age',
+    expected: 'number',
+    received: 'string',
+    operation: 'assign',
+  });
+  const sent = { status: undefined, body: undefined };
+  const response = {
+    status(code) {
+      sent.status = code;
+      return this;
+    },
+    json(body) {
+      sent.body = body;
+      return body;
+    },
+  };
+  const host = {
+    switchToHttp() {
+      return { getResponse: () => response };
+    },
+  };
+
+  new StrictTypeErrorFilter().catch(exception, host);
+
+  assert.equal(sent.status, 400);
+  assert.deepEqual(sent.body, {
+    statusCode: 400,
+    message: 'CreateUserDto.age expected number, received string',
+    code: 'TYPE_MISMATCH',
+    contractKind: 'parameter',
+    propertyPath: 'CreateUserDto.age',
+    expected: 'number',
+    received: 'string',
+    operation: 'assign',
+  });
+});
+
+test('a real Nest HTTP route returns the safe StrictTypeError response', async (t) => {
+  class TestController {
+    reject() {
+      throw new StrictTypeError({
+        code: 'TYPE_MISMATCH',
+        contractKind: 'parameter',
+        propertyPath: 'CreateUserDto.age',
+        expected: 'number',
+        received: 'string',
+        operation: 'assign',
+      });
+    }
+  }
+  Controller('typed')(TestController);
+  const descriptor = Object.getOwnPropertyDescriptor(TestController.prototype, 'reject');
+  Get('reject')(TestController.prototype, 'reject', descriptor);
+  UseFilters(StrictTypeErrorFilter)(TestController.prototype, 'reject', descriptor);
+
+  class TestModule {}
+  Module({ controllers: [TestController] })(TestModule);
+
+  const application = await NestFactory.create(TestModule, { logger: false });
+  t.after(async () => application.close());
+  await application.listen(0, '127.0.0.1');
+  const address = application.getHttpServer().address();
+  assert.equal(typeof address, 'object');
+  assert.notEqual(address, null);
+
+  const response = await fetch(`http://127.0.0.1:${address.port}/typed/reject`);
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), {
+    statusCode: 400,
+    message: 'CreateUserDto.age expected number, received string',
+    code: 'TYPE_MISMATCH',
+    contractKind: 'parameter',
+    propertyPath: 'CreateUserDto.age',
+    expected: 'number',
+    received: 'string',
+    operation: 'assign',
+  });
+});
