@@ -4,6 +4,17 @@ All notable changes to `@ts-typed/nestjs` are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.0] - 2026-10-17
+
+### Fixed
+
+- `StrictTypeErrorFilter` returned HTTP 400 for every `StrictTypeError`, including one raised while validating a function or method's own return value (for example, a mapper reading a corrupted row out of the database) — a server-side failure, not a bad request. A violation whose `operation` is `return` or `resolve` now maps to HTTP 500; every other operation (`argument`, `set`, `initialize`, …) keeps the existing 400.
+- The package's `exports` map did not expose `./package.json`, breaking `require.resolve('@ts-typed/nestjs/package.json')` and similar version-probing patterns.
+
+### Changed
+
+- Depends on `@ts-typed/compiler@0.1.0`, whose changelog covers the coverage gaps (class methods/constructors, decorated fields, `Date`) that this package's own tests exercise against a real NestJS app.
+
 ## [0.0.1] - 2026-10-16
 
 Initial release.

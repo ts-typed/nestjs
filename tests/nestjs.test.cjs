@@ -136,6 +136,103 @@ test('the Nest error filter exposes only StrictTypeError safe metadata as HTTP 4
   });
 });
 
+test('the Nest error filter returns HTTP 500 for a return-value violation (B10)', () => {
+  const exception = new StrictTypeError({
+    code: 'TYPE_MISMATCH',
+    contractKind: 'return',
+    propertyPath: 'UserMapper.toDto.createdAt',
+    expected: 'Date',
+    received: 'string',
+    operation: 'return',
+  });
+  const sent = { status: undefined, body: undefined };
+  const response = {
+    status(code) {
+      sent.status = code;
+      return this;
+    },
+    json(body) {
+      sent.body = body;
+      return body;
+    },
+  };
+  const host = {
+    switchToHttp() {
+      return { getResponse: () => response };
+    },
+  };
+
+  new StrictTypeErrorFilter().catch(exception, host);
+
+  assert.equal(sent.status, 500);
+  assert.equal(sent.body.statusCode, 500);
+  assert.equal(sent.body.operation, 'return');
+});
+
+test('the Nest error filter returns HTTP 400 for an argument violation, unaffected by B10', () => {
+  const exception = new StrictTypeError({
+    code: 'TYPE_MISMATCH',
+    contractKind: 'parameter',
+    propertyPath: 'CreateUserDto.age',
+    expected: 'number',
+    received: 'string',
+    operation: 'argument',
+  });
+  const sent = { status: undefined, body: undefined };
+  const response = {
+    status(code) {
+      sent.status = code;
+      return this;
+    },
+    json(body) {
+      sent.body = body;
+      return body;
+    },
+  };
+  const host = {
+    switchToHttp() {
+      return { getResponse: () => response };
+    },
+  };
+
+  new StrictTypeErrorFilter().catch(exception, host);
+
+  assert.equal(sent.status, 400);
+});
+
+test('a real Nest HTTP route returns a 500 for a return-value violation', async (t) => {
+  class TestController {
+    reject() {
+      throw new StrictTypeError({
+        code: 'TYPE_MISMATCH',
+        contractKind: 'return',
+        propertyPath: 'UserMapper.toDto.createdAt',
+        expected: 'Date',
+        received: 'string',
+        operation: 'return',
+      });
+    }
+  }
+  Controller('typed')(TestController);
+  const descriptor = Object.getOwnPropertyDescriptor(TestController.prototype, 'reject');
+  Get('reject')(TestController.prototype, 'reject', descriptor);
+  UseFilters(StrictTypeErrorFilter)(TestController.prototype, 'reject', descriptor);
+
+  class TestModule {}
+  Module({ controllers: [TestController] })(TestModule);
+
+  const application = await NestFactory.create(TestModule, { logger: false });
+  t.after(async () => application.close());
+  await application.listen(0, '127.0.0.1');
+  const address = application.getHttpServer().address();
+
+  const response = await fetch(`http://127.0.0.1:${address.port}/typed/reject`);
+  assert.equal(response.status, 500);
+  const body = await response.json();
+  assert.equal(body.statusCode, 500);
+  assert.equal(body.operation, 'return');
+});
+
 test('a real Nest HTTP route returns the safe StrictTypeError response', async (t) => {
   class TestController {
     reject() {
