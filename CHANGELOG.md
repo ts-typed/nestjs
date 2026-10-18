@@ -4,6 +4,16 @@ All notable changes to `@ts-typed/nestjs` are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.7] - 2026-10-18
+
+### Added
+
+- Closes `FILTER_STATUS_FOR_ENTITY_HYDRATION`: `StrictTypeErrorFilter` now also treats `exception.isServerPopulated === true` as a server fault (alongside the existing `return`/`resolve`-operation and `variable`-contractKind checks), mapping it to HTTP 500 instead of 400. A class field (`contractKind: 'property'`) is otherwise indistinguishable between a TypeORM Entity reading corrupted data back from the database (a server fault) and a DTO populated from client input by `class-transformer` (a client fault) — both go through the exact same `contractKind`/`operation` path. The app now breaks that tie explicitly, by marking its Entity classes with `@ts-typed/compiler`'s new `ServerPopulated()` decorator (0.1.12): every `StrictTypeError` thrown for one of that class's fields then carries `isServerPopulated: true`, which this filter checks directly on the caught exception object — the flag is never present in the HTTP response body, since `StrictTypeError#toJSON()` deliberately excludes it.
+
+### Changed
+
+- Depends on `@ts-typed/compiler@0.1.12` (adds the `ServerPopulated()` marker this release relies on).
+
 ## [0.1.6] - 2026-10-18
 
 ### Changed

@@ -32,6 +32,17 @@ const SERVER_FAULT_OPERATIONS: ReadonlySet<string> = new Set(['return', 'resolve
 const SERVER_FAULT_CONTRACT_KINDS: ReadonlySet<string> = new Set(['variable']);
 
 /**
+ * A class field (`contractKind: 'property'`) is otherwise indistinguishable
+ * between a TypeORM Entity (corrupted database row — a server fault) and a
+ * DTO populated by `class-transformer` from client input (a client fault) —
+ * both go through the exact same `contractKind`/`operation` path. The app
+ * breaks that tie explicitly by marking its Entity classes with
+ * `ServerPopulated()` (from `@ts-typed/compiler`), which makes every
+ * `StrictTypeError` thrown for one of that class's fields carry
+ * `isServerPopulated: true`.
+ */
+
+/**
  * Translates a `StrictTypeError` thrown by instrumented code (a DTO/provider
  * field failing validation at a protected boundary) into an HTTP response,
  * using `StrictTypeError#toJSON()`'s already-safe payload (no raw received
@@ -47,7 +58,8 @@ export class StrictTypeErrorFilter implements ExceptionFilter {
     const response = host.switchToHttp().getResponse<MinimalHttpResponse>();
     const isServerFault =
       SERVER_FAULT_OPERATIONS.has(exception.operation) ||
-      SERVER_FAULT_CONTRACT_KINDS.has(exception.contractKind);
+      SERVER_FAULT_CONTRACT_KINDS.has(exception.contractKind) ||
+      exception.isServerPopulated === true;
     const status = isServerFault ? HttpStatus.INTERNAL_SERVER_ERROR : HttpStatus.BAD_REQUEST;
     const httpException = new HttpException({
       statusCode: status,

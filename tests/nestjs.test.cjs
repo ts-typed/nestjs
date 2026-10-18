@@ -233,6 +233,41 @@ test('the Nest error filter keeps HTTP 400 for a class field (property) violatio
   assert.equal(sent.status, 400);
 });
 
+test('the Nest error filter returns HTTP 500 for a class field violation marked isServerPopulated (e.g. a TypeORM Entity)', () => {
+  const exception = new StrictTypeError({
+    code: 'TYPE_MISMATCH',
+    contractKind: 'property',
+    propertyPath: 'UserEntity.role',
+    expected: 'UserRole',
+    received: 'string',
+    operation: 'initialize',
+    isServerPopulated: true,
+  });
+  const sent = { status: undefined, body: undefined };
+  const response = {
+    status(code) {
+      sent.status = code;
+      return this;
+    },
+    json(body) {
+      sent.body = body;
+      return body;
+    },
+  };
+  const host = {
+    switchToHttp() {
+      return { getResponse: () => response };
+    },
+  };
+
+  new StrictTypeErrorFilter().catch(exception, host);
+
+  assert.equal(sent.status, 500);
+  assert.equal(sent.body.statusCode, 500);
+  assert.equal(sent.body.contractKind, 'property');
+  assert.equal(Object.hasOwn(sent.body, 'isServerPopulated'), false);
+});
+
 test('the Nest error filter returns HTTP 400 for an argument violation, unaffected by B10', () => {
   const exception = new StrictTypeError({
     code: 'TYPE_MISMATCH',
