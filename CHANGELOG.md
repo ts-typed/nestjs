@@ -4,6 +4,12 @@ All notable changes to `@ts-typed/nestjs` are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.2] - 2026-10-17
+
+### Changed
+
+- Depends on `@ts-typed/compiler@0.1.2`, which fixes a severe regression 0.1.1 introduced (a readonly field with `?`/`!` locked immediately, breaking class-transformer-built DTOs) and adds `static` field and `Map`/`Set` support. No code changes in this package itself; this bump keeps both packages pinned to compatible, non-duplicated versions of `StrictTypeError` (an exact-pinned transitive dependency on a different compiler version than the app's own direct dependency would create two separate `StrictTypeError` classes, breaking `instanceof` checks across the package boundary).
+
 ## [0.1.1] - 2026-10-17
 
 ### Fixed
