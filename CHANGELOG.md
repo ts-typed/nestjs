@@ -4,6 +4,12 @@ All notable changes to `@ts-typed/nestjs` are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.4] - 2026-10-18
+
+### Changed
+
+- Depends on `@ts-typed/compiler@0.1.9` (adds the opt-in `enforceClosedInstances` flag in 0.1.7, and extends the opt-in `enforceMutationGuards` flag to arrays in 0.1.8 and to `Map`/`Set` in 0.1.9). No code changes in this package itself — the same exact-pin re-sync routine as 0.1.3, done this time right after each compiler release instead of a few releases late.
+
 ## [0.1.3] - 2026-10-18
 
 ### Changed
