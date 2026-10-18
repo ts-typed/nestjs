@@ -4,6 +4,12 @@ All notable changes to `@ts-typed/nestjs` are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.13] - 2026-10-18
+
+### Changed
+
+- Depends on `@ts-typed/compiler@0.1.18`. The 0.1.12 release bumped this package's own version for a documentation-only change but missed re-syncing the pinned compiler dependency (left at `0.1.17` while the app's own direct dependency had already moved to `0.1.18`) — the same cross-package version-identity bug documented in the 0.1.3 and 0.1.8 changelog entries (two separate `StrictTypeError` classes at runtime). No code changes in this package itself.
+
 ## [0.1.12] - 2026-10-18
 
 ### Documentation
