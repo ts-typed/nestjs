@@ -4,6 +4,12 @@ All notable changes to `@ts-typed/nestjs` are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.14] - 2026-10-18
+
+### Changed
+
+- Depends on `@ts-typed/compiler@0.1.20` (adds the `ValueObject` base class and runtime auto-construction at boundaries, step 1-2 of a new feature; no code changes needed in this package since it has no HTTP-specific interaction with `ValueObject`). No code changes in this package itself.
+
 ## [0.1.13] - 2026-10-18
 
 ### Changed
