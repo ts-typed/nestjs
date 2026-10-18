@@ -4,6 +4,12 @@ All notable changes to `@ts-typed/nestjs` are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.5] - 2026-10-18
+
+### Changed
+
+- Depends on `@ts-typed/compiler@0.1.10` (extends the opt-in `enforceMutationGuards` flag to plain objects/interfaces in 0.1.10, closing `SEALED_OBJECTS` and the plain-object half of `REFLECTIVE_MUTATION`). No code changes in this package itself.
+
 ## [0.1.4] - 2026-10-18
 
 ### Changed
