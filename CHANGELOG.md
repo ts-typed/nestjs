@@ -4,6 +4,12 @@ All notable changes to `@ts-typed/nestjs` are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.12] - 2026-10-18
+
+### Documentation
+
+- Full `README.md` rewrite: how the 400/500 status is decided, `ServerPopulated()` and `TypeErrorResponse()` usage with real DTO/Entity examples, `StrictTypeHttpError` for building a custom filter, example response bodies for each case, and known limitations (including the fail-fast/no-aggregation scope boundary). No code changes.
+
 ## [0.1.11] - 2026-10-18
 
 ### Added
