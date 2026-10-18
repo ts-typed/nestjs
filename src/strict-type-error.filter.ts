@@ -43,6 +43,31 @@ const SERVER_FAULT_CONTRACT_KINDS: ReadonlySet<string> = new Set(['variable']);
  */
 
 /**
+ * A field decorated with `TypeErrorResponse(message, status?)` (from
+ * `@ts-typed/compiler`) carries its own custom message — and optionally its
+ * own status — on the thrown error, as `typeErrorResponseMessage`/
+ * `typeErrorResponseStatus`. Neither is ever present in `toJSON()`'s output
+ * (ts-typed deliberately keeps them off the generic serialized shape), so
+ * they only ever reach this filter through the raw exception object. An
+ * explicit per-property response like this is a developer's deliberate
+ * choice for that field, so it takes priority over the server-fault/client-
+ * fault heuristic below, regardless of `contractKind`/`operation`/
+ * `isServerPopulated` — the developer already decided how this one field's
+ * violation should look to a client.
+ */
+function buildTypeErrorResponse(
+  exception: StrictTypeError,
+): { readonly statusCode: number; readonly message: string } | undefined {
+  if (exception.typeErrorResponseMessage === undefined) {
+    return undefined;
+  }
+  return {
+    statusCode: exception.typeErrorResponseStatus ?? HttpStatus.BAD_REQUEST,
+    message: exception.typeErrorResponseMessage,
+  };
+}
+
+/**
  * Translates a `StrictTypeError` thrown by instrumented code (a DTO/provider
  * field failing validation at a protected boundary) into an HTTP response,
  * using `StrictTypeError#toJSON()`'s already-safe payload (no raw received
@@ -56,14 +81,16 @@ const SERVER_FAULT_CONTRACT_KINDS: ReadonlySet<string> = new Set(['variable']);
 export class StrictTypeErrorFilter implements ExceptionFilter {
   public catch(exception: StrictTypeError, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<MinimalHttpResponse>();
-    const isServerFault =
-      SERVER_FAULT_OPERATIONS.has(exception.operation) ||
-      SERVER_FAULT_CONTRACT_KINDS.has(exception.contractKind) ||
-      exception.isServerPopulated === true;
-    const status = isServerFault ? HttpStatus.INTERNAL_SERVER_ERROR : HttpStatus.BAD_REQUEST;
+    const customResponse = buildTypeErrorResponse(exception);
+    const status = customResponse?.statusCode ??
+      (SERVER_FAULT_OPERATIONS.has(exception.operation) ||
+        SERVER_FAULT_CONTRACT_KINDS.has(exception.contractKind) ||
+        exception.isServerPopulated === true
+        ? HttpStatus.INTERNAL_SERVER_ERROR
+        : HttpStatus.BAD_REQUEST);
     const httpException = new HttpException({
       statusCode: status,
-      message: exception.message,
+      message: customResponse?.message ?? exception.message,
       ...exception.toJSON(),
     }, status);
     response.status(httpException.getStatus()).json(httpException.getResponse());

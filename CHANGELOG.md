@@ -4,6 +4,18 @@ All notable changes to `@ts-typed/nestjs` are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.10] - 2026-10-18
+
+### Added
+
+- `StrictTypeErrorFilter` now honors a field's `TypeErrorResponse(message, status?)` decorator (from `@ts-typed/compiler@0.1.17`): when the thrown error carries `typeErrorResponseMessage`, the filter responds with that custom message and status (default `400`) instead of ts-typed's own message, as a per-property alternative to `class-validator`. The rest of the body stays the same shape as always — `code`, `propertyPath`, `expected`, `received`, `contractKind`, `operation` — so a client gets the custom message AND the full diagnostic detail (which type was expected, what was received, etc.) together. An explicit `TypeErrorResponse` takes PRIORITY over the `isServerPopulated`/`return`-`resolve`/`variable` server-fault heuristic — a developer who explicitly decorated a field already decided how that field's violation should look to a client, regardless of what the generic heuristic would otherwise pick. `TypeErrorResponse`/`TypeErrorResponseOptions` are re-exported from `@ts-typed/nestjs` directly, so `import { TypeErrorResponse } from '@ts-typed/nestjs'` works without a separate `@ts-typed/compiler` import.
+
+  **This is still a single-violation (fail-fast) mechanism** — it customizes the response for whichever ONE violation fires on the decorated property, not an aggregate of every violation across a DTO the way `class-validator` reports by default. Aggregating multiple violations into one response is a separate, materially larger change (ts-typed validates and populates a DTO field-by-field, throwing on the first bad field, unlike `class-validator`'s "populate everything, then validate the whole object in one pass" model) — tracked as a future enhancement, not attempted here.
+
+### Changed
+
+- Depends on `@ts-typed/compiler@0.1.17` (adds the `TypeErrorResponse` decorator this release consumes).
+
 ## [0.1.9] - 2026-10-18
 
 ### Changed
