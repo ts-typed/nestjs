@@ -1,6 +1,6 @@
 {
     "name": "@ts-typed/nestjs",
-    "version": "0.1.5",
+    "version": "0.1.6",
     "private": false,
     "publishConfig": {
         "access": "public"
@@ -33,7 +33,7 @@
         "test": "npm run build && node --test --test-concurrency=1"
     },
     "dependencies": {
-        "@ts-typed/compiler": "0.1.10"
+        "@ts-typed/compiler": "0.1.11"
     },
     "peerDependencies": {
         "@nestjs/common": ">=10 <13",
