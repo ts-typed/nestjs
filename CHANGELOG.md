@@ -4,6 +4,12 @@ All notable changes to `@ts-typed/nestjs` are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.11] - 2026-10-18
+
+### Added
+
+- A new `StrictTypeHttpError` class (extends Nest's `HttpException`) exposes the exact status/message mapping `StrictTypeErrorFilter` uses internally (the 400/500 server-fault heuristic, `isServerPopulated`, and `TypeErrorResponse` priority) as a standalone, reusable building block. `StrictTypeErrorFilter` is unchanged behavior-wise — it now builds a `StrictTypeHttpError` internally and writes it to the response, exactly as before. The new piece is for anyone who wants different handling than `StrictTypeErrorFilter` provides (custom logging, a different response body shape, i18n, …): write your own `@Catch(StrictTypeError)` filter and call `StrictTypeHttpError.fromStrictTypeError(exception)` to get the same resolved status/message/diagnostic fields (`code`, `propertyPath`, `expected`, `received`, `contractKind`, `operation`) without reimplementing any of the mapping logic. The original `StrictTypeError` stays available as `httpError.cause`.
+
 ## [0.1.10] - 2026-10-18
 
 ### Added

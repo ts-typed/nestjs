@@ -14,6 +14,7 @@ const {
   nestjsIntegrationAdapter,
   resolveProject,
   StrictTypeErrorFilter,
+  StrictTypeHttpError,
 } = require('../dist');
 
 test('the Nest adapter resolves nest-cli tsConfigPath and honors explicit config', () => {
@@ -375,6 +376,72 @@ test('the Nest error filter lets TypeErrorResponse take priority over isServerPo
 
   assert.equal(sent.status, 422);
   assert.equal(sent.body.message, 'Role inválida');
+});
+
+test('StrictTypeHttpError.fromStrictTypeError exposes the same mapping StrictTypeErrorFilter uses internally', () => {
+  const exception = new StrictTypeError({
+    code: 'TYPE_MISMATCH',
+    contractKind: 'return',
+    propertyPath: 'UserMapper.toDto.createdAt',
+    expected: 'Date',
+    received: 'string',
+    operation: 'return',
+  });
+
+  const httpError = StrictTypeHttpError.fromStrictTypeError(exception);
+
+  assert.ok(httpError instanceof StrictTypeHttpError);
+  assert.equal(httpError.getStatus(), 500);
+  assert.equal(httpError.cause, exception);
+  assert.equal(httpError.getResponse().statusCode, 500);
+  assert.equal(httpError.getResponse().code, 'TYPE_MISMATCH');
+  assert.equal(httpError.getResponse().propertyPath, 'UserMapper.toDto.createdAt');
+});
+
+test('a custom @Catch(StrictTypeError) filter can build on StrictTypeHttpError instead of using StrictTypeErrorFilter', () => {
+  const exception = new StrictTypeError({
+    code: 'TYPE_MISMATCH',
+    contractKind: 'property',
+    propertyPath: 'CreateUserDto.email',
+    expected: 'string',
+    received: 'number',
+    operation: 'initialize',
+    typeErrorResponseMessage: 'Email inválido',
+    typeErrorResponseStatus: 422,
+  });
+
+  class MyOwnFilter {
+    catch(caught, host) {
+      const httpError = StrictTypeHttpError.fromStrictTypeError(caught);
+      const response = host.switchToHttp().getResponse();
+      // a consumer is free to reshape the body however they like, log it,
+      // translate the message, etc. - StrictTypeHttpError just hands them
+      // the already-resolved status/message/diagnostic fields to work with.
+      response.status(httpError.getStatus()).json({ ok: false, reason: httpError.getResponse().message });
+    }
+  }
+
+  const sent = { status: undefined, body: undefined };
+  const response = {
+    status(code) {
+      sent.status = code;
+      return this;
+    },
+    json(body) {
+      sent.body = body;
+      return body;
+    },
+  };
+  const host = {
+    switchToHttp() {
+      return { getResponse: () => response };
+    },
+  };
+
+  new MyOwnFilter().catch(exception, host);
+
+  assert.equal(sent.status, 422);
+  assert.deepEqual(sent.body, { ok: false, reason: 'Email inválido' });
 });
 
 test('the Nest error filter returns HTTP 400 for an argument violation, unaffected by B10', () => {
