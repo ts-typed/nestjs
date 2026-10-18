@@ -4,6 +4,12 @@ All notable changes to `@ts-typed/nestjs` are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.3] - 2026-10-18
+
+### Changed
+
+- Depends on `@ts-typed/compiler@0.1.6` (adds type-predicate/assertion-function validation in 0.1.5, and `exports`-level protection for exported `let`/`var` bindings in 0.1.6). No code changes in this package itself. Re-confirms, the hard way, why this exact-pinned bump must happen every time the compiler releases: skipping it for a few compiler releases let a consuming app's own `@ts-typed/compiler` devDependency drift ahead of this package's pinned transitive one, which gives the two packages two separate `StrictTypeError` classes at runtime (one per resolved module instance) — `@Catch(StrictTypeError)` then silently stops matching the exception the app throws, since it's an `instanceof` of the *other* class. Caught by teste-ts-typed's real `npm install` (not the dist-overlay shortcut, which never changes which copy is resolved) surfacing 8 failing HTTP filter/integration tests; fixed by this version bump alone, no source change needed.
+
 ## [0.1.2] - 2026-10-17
 
 ### Changed
