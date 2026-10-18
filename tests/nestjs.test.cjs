@@ -169,6 +169,70 @@ test('the Nest error filter returns HTTP 500 for a return-value violation (B10)'
   assert.equal(sent.body.operation, 'return');
 });
 
+test('the Nest error filter returns HTTP 500 for a plain local variable violation (e.g. corrupted data read back from a database)', () => {
+  const exception = new StrictTypeError({
+    code: 'TYPE_MISMATCH',
+    contractKind: 'variable',
+    propertyPath: 'entity',
+    expected: 'UserEntity',
+    received: 'object',
+    operation: 'initialize',
+  });
+  const sent = { status: undefined, body: undefined };
+  const response = {
+    status(code) {
+      sent.status = code;
+      return this;
+    },
+    json(body) {
+      sent.body = body;
+      return body;
+    },
+  };
+  const host = {
+    switchToHttp() {
+      return { getResponse: () => response };
+    },
+  };
+
+  new StrictTypeErrorFilter().catch(exception, host);
+
+  assert.equal(sent.status, 500);
+  assert.equal(sent.body.statusCode, 500);
+  assert.equal(sent.body.contractKind, 'variable');
+});
+
+test('the Nest error filter keeps HTTP 400 for a class field (property) violation, e.g. a DTO', () => {
+  const exception = new StrictTypeError({
+    code: 'TYPE_MISMATCH',
+    contractKind: 'property',
+    propertyPath: 'CreateUserDto.age',
+    expected: 'number',
+    received: 'string',
+    operation: 'initialize',
+  });
+  const sent = { status: undefined, body: undefined };
+  const response = {
+    status(code) {
+      sent.status = code;
+      return this;
+    },
+    json(body) {
+      sent.body = body;
+      return body;
+    },
+  };
+  const host = {
+    switchToHttp() {
+      return { getResponse: () => response };
+    },
+  };
+
+  new StrictTypeErrorFilter().catch(exception, host);
+
+  assert.equal(sent.status, 400);
+});
+
 test('the Nest error filter returns HTTP 400 for an argument violation, unaffected by B10', () => {
   const exception = new StrictTypeError({
     code: 'TYPE_MISMATCH',

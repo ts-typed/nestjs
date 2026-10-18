@@ -19,6 +19,19 @@ interface MinimalHttpResponse {
 const SERVER_FAULT_OPERATIONS: ReadonlySet<string> = new Set(['return', 'resolve']);
 
 /**
+ * A plain local variable (`const entity = await repo.findOneBy(...)`) is
+ * never the client-facing surface of a request: client input only ever
+ * reaches a protected contract through a `parameter` (`@Body()`/`@Param()`
+ * decorated arguments, which use the `argument` operation, never
+ * `variable`) or a `property` (a DTO's own fields). A violation whose
+ * `contractKind` is `variable` is therefore always a server-side data
+ * problem — typically corrupted data read back from a database — even
+ * though its `operation` is `initialize`/`set`, which otherwise means
+ * "value came from outside this function" and defaults to 400.
+ */
+const SERVER_FAULT_CONTRACT_KINDS: ReadonlySet<string> = new Set(['variable']);
+
+/**
  * Translates a `StrictTypeError` thrown by instrumented code (a DTO/provider
  * field failing validation at a protected boundary) into an HTTP response,
  * using `StrictTypeError#toJSON()`'s already-safe payload (no raw received
@@ -32,9 +45,10 @@ const SERVER_FAULT_OPERATIONS: ReadonlySet<string> = new Set(['return', 'resolve
 export class StrictTypeErrorFilter implements ExceptionFilter {
   public catch(exception: StrictTypeError, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<MinimalHttpResponse>();
-    const status = SERVER_FAULT_OPERATIONS.has(exception.operation)
-      ? HttpStatus.INTERNAL_SERVER_ERROR
-      : HttpStatus.BAD_REQUEST;
+    const isServerFault =
+      SERVER_FAULT_OPERATIONS.has(exception.operation) ||
+      SERVER_FAULT_CONTRACT_KINDS.has(exception.contractKind);
+    const status = isServerFault ? HttpStatus.INTERNAL_SERVER_ERROR : HttpStatus.BAD_REQUEST;
     const httpException = new HttpException({
       statusCode: status,
       message: exception.message,

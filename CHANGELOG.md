@@ -4,6 +4,16 @@ All notable changes to `@ts-typed/nestjs` are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] - 2026-10-17
+
+### Fixed
+
+- `StrictTypeErrorFilter` kept returning HTTP 400 for a violation on a plain local variable (e.g. `const entity = await repo.findOneBy(...)` reading corrupted data back from a database) because the value flowed through an `initialize`/`set` operation, not `return`/`resolve`. A local variable is never the client-facing surface of a request — client input only ever reaches a protected contract through a `parameter` or a `property` (a DTO's own fields) — so a violation whose `contractKind` is `variable` now also maps to HTTP 500, regardless of its `operation`.
+
+### Changed
+
+- Depends on `@ts-typed/compiler@0.1.1`.
+
 ## [0.1.0] - 2026-10-17
 
 ### Fixed
