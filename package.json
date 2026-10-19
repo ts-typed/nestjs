@@ -1,6 +1,6 @@
 {
     "name": "@ts-typed/nestjs",
-    "version": "0.1.18",
+    "version": "0.1.19",
     "private": false,
     "publishConfig": {
         "access": "public"
@@ -8,7 +8,7 @@
     "description": "NestJS integration for ts-typed: project resolution adapter and StrictTypeError HTTP exception filter",
     "license": "Apache-2.0",
     "engines": {
-        "node": ">=22"
+        "node": ">=18"
     },
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
@@ -33,12 +33,12 @@
         "test": "npm run build && node --test --test-concurrency=1"
     },
     "dependencies": {
-        "@ts-typed/compiler": "0.1.24"
+        "@ts-typed/compiler": "0.1.25"
     },
     "peerDependencies": {
         "@nestjs/common": ">=10 <13",
         "@nestjs/core": ">=10 <13",
-        "typescript": ">=5.9 <6"
+        "typescript": ">=5.4 <7"
     },
     "devDependencies": {
         "@nestjs/common": "12.1.3",
