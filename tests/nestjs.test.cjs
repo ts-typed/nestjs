@@ -8,7 +8,7 @@ require('reflect-metadata');
 
 const { Controller, Get, Module, UseFilters } = require('@nestjs/common');
 const { NestFactory } = require('@nestjs/core');
-const { StrictTypeError } = require('@ts-typed/compiler');
+const { StrictTypeError, AggregateStrictTypeError } = require('@ts-typed/compiler');
 const { resolveProject: resolveCoreProject } = require('@ts-typed/compiler/integration');
 const {
   nestjsIntegrationAdapter,
@@ -548,4 +548,97 @@ test('a real Nest HTTP route returns the safe StrictTypeError response', async (
     received: 'string',
     operation: 'assign',
   });
+});
+
+test('the Nest error filter surfaces every violation for an AggregateStrictTypeError, still as HTTP 400', () => {
+  const exception = new AggregateStrictTypeError([
+    {
+      code: 'TYPE_MISMATCH',
+      contractKind: 'parameter',
+      propertyPath: 'CreateUserDto.name',
+      expected: 'string',
+      received: 'number',
+      operation: 'argument',
+    },
+    {
+      code: 'TYPE_MISMATCH',
+      contractKind: 'parameter',
+      propertyPath: 'CreateUserDto.age',
+      expected: 'number',
+      received: 'string',
+      operation: 'argument',
+    },
+  ]);
+  const sent = { status: undefined, body: undefined };
+  const response = {
+    status(code) {
+      sent.status = code;
+      return this;
+    },
+    json(body) {
+      sent.body = body;
+      return body;
+    },
+  };
+  const host = {
+    switchToHttp() {
+      return { getResponse: () => response };
+    },
+  };
+
+  new StrictTypeErrorFilter().catch(exception, host);
+
+  assert.equal(sent.status, 400);
+  assert.equal(sent.body.errors.length, 2);
+  assert.deepEqual(
+    sent.body.errors.map((error) => error.propertyPath),
+    ['CreateUserDto.name', 'CreateUserDto.age'],
+  );
+  assert.match(sent.body.message, /Validation failed: 2 error\(s\)/);
+});
+
+test('a real Nest HTTP route returns every collected violation for an @AggregateErrors() DTO, still as HTTP 400', async (t) => {
+  class TestController {
+    reject() {
+      throw new AggregateStrictTypeError([
+        {
+          code: 'TYPE_MISMATCH',
+          contractKind: 'parameter',
+          propertyPath: 'CreateUserDto.name',
+          expected: 'string',
+          received: 'number',
+          operation: 'argument',
+        },
+        {
+          code: 'TYPE_MISMATCH',
+          contractKind: 'parameter',
+          propertyPath: 'CreateUserDto.age',
+          expected: 'number',
+          received: 'string',
+          operation: 'argument',
+        },
+      ]);
+    }
+  }
+  Controller('typed')(TestController);
+  const descriptor = Object.getOwnPropertyDescriptor(TestController.prototype, 'reject');
+  Get('reject')(TestController.prototype, 'reject', descriptor);
+  UseFilters(StrictTypeErrorFilter)(TestController.prototype, 'reject', descriptor);
+
+  class TestModule {}
+  Module({ controllers: [TestController] })(TestModule);
+
+  const application = await NestFactory.create(TestModule, { logger: false });
+  t.after(async () => application.close());
+  await application.listen(0, '127.0.0.1');
+  const address = application.getHttpServer().address();
+
+  const response = await fetch(`http://127.0.0.1:${address.port}/typed/reject`);
+  assert.equal(response.status, 400);
+  const body = await response.json();
+  assert.equal(body.errors.length, 2);
+  assert.deepEqual(
+    body.errors.map((error) => error.propertyPath),
+    ['CreateUserDto.name', 'CreateUserDto.age'],
+  );
 });

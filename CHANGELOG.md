@@ -4,6 +4,12 @@ All notable changes to `@ts-typed/nestjs` are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.20] - 2026-10-19
+
+### Changed
+
+- Bumped the `@ts-typed/compiler` dependency to `0.1.26`, which adds the `AggregateErrors()` class decorator (collects every validation violation in a parameter-boundary DTO into one `AggregateStrictTypeError`, instead of stopping at the first). No source changes were needed in this package: `AggregateStrictTypeError extends StrictTypeError`, so `StrictTypeErrorFilter`'s existing `@Catch(StrictTypeError)` already catches it, and `StrictTypeHttpError.fromStrictTypeError`'s existing `...exception.toJSON()` spread already surfaces the full `errors` array in the HTTP response body, since `AggregateStrictTypeError` overrides `toJSON()` to include it. Added end-to-end tests confirming this (a direct filter test, and a real Nest HTTP route test), both asserting every violation reaches the client in one 400 response.
+
 ## [0.1.19] - 2026-10-19
 
 ### Changed
