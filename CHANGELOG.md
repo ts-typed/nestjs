@@ -4,6 +4,12 @@ All notable changes to `@ts-typed/nestjs` are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.23] - 2026-10-20
+
+### Changed
+
+- Bumped the exact `@ts-typed/compiler` dependency to `0.1.29`. This keeps Nest's `StrictTypeErrorFilter` on the same runtime error-class identity as applications using the compiler's native `ts-typed nest build` and `ts-typed nest start` commands.
+
 ## [0.1.22] - 2026-10-19
 
 ### Changed
