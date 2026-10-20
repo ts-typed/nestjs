@@ -25,6 +25,7 @@ It does not replace Nest's own validation pipes or instantiate DTOs — it only 
 - [`TypeErrorResponse()` — a per-field alternative to class-validator](#typeerrorresponse--a-per-field-alternative-to-class-validator)
 - [`StrictTypeHttpError` — build your own filter](#stricttypehttperror--build-your-own-filter)
 - [Example response bodies](#example-response-bodies)
+- [Performance](#performance)
 - [Known limitations](#known-limitations)
 
 ## How the status code is decided
@@ -155,9 +156,15 @@ A `@ServerPopulated()` Entity field with corrupted data:
 
 None of these ever include the raw value that failed validation or a stack trace — `StrictTypeError#toJSON()` (which this body is built from) deliberately omits both.
 
+## Performance
+
+`StrictTypeErrorFilter` only handles the error path; successful-response cost belongs to the compiler runtime at the typed boundary. In the project’s local stress battery (Node 22, TypeORM with in-memory SQLite, 10,000 entities with `passwordHash` removed), a protected Nest response measured 14.41 req/s versus 76.28 req/s for the same unprotected projection. This is intentionally an oversized response, not a production capacity claim.
+
+Use pagination/cursors and bounded page sizes before optimizing a response this large. The [reproducible TypeORM, Express and Nest battery](https://github.com/ts-typed/ts-typed/blob/main/docs/performance.md) separates validation from deep protection and maps the current bottlenecks.
+
 ## Known limitations
 
-- **Multiple violations aren't aggregated into one response.** ts-typed validates and populates an object field-by-field, throwing on the FIRST bad field — unlike `class-validator`'s "populate everything, then validate the whole object in one pass, collecting every violation" model. If your API contract needs every field's errors together in one response, you'll need to keep `class-validator` (or something like it) for that specific need; `TypeErrorResponse` and `ServerPopulated` solve per-field message/status customization and entity/DTO disambiguation, not error aggregation. Aggregating is tracked as a possible future, separately-designed enhancement.
+- **Aggregation is opt-in and class-scoped.** By default ts-typed is fail-fast. `AggregateErrors()` on a DTO class collects multiple violations at the parameter boundary and on eligible field writes, and the filter renders the resulting aggregate error. It is not a global replacement for every `class-validator` workflow; see the compiler README for its boundary and lifecycle rules.
 - See [`@ts-typed/compiler`'s README](https://www.npmjs.com/package/@ts-typed/compiler) for the underlying library's own scope boundaries (inferred generics, `WeakMap`/`WeakSet`, etc.) — anything not validated there has nothing for this package's filter to react to either.
 
 ## License
