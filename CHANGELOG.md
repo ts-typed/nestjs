@@ -4,6 +4,12 @@ All notable changes to `@ts-typed/nestjs` are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.22] - 2026-10-19
+
+### Changed
+
+- Bumped the exact `@ts-typed/compiler` dependency to `0.1.28`, which caches immutable object-schema metadata during a validation/protection traversal. Pinning the matching compiler version preserves one shared `StrictTypeError` identity between instrumented application code and `StrictTypeErrorFilter`.
+
 ## [0.1.21] - 2026-10-19
 
 ### Fixed
