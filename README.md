@@ -158,7 +158,7 @@ None of these ever include the raw value that failed validation or a stack trace
 
 ## Performance
 
-`StrictTypeErrorFilter` only handles the error path; successful-response cost belongs to the compiler runtime at the typed boundary. In the project’s local stress battery (Node 22, TypeORM with in-memory SQLite, 10,000 entities with `passwordHash` removed), a protected Nest response measured 14.41 req/s versus 76.28 req/s for the same unprotected projection. This is intentionally an oversized response, not a production capacity claim.
+`StrictTypeErrorFilter` only handles the error path; successful-response cost belongs to the compiler runtime at the typed boundary. In the project’s local stress battery (Node 22, TypeORM with in-memory SQLite, 10,000 entities with `passwordHash` removed), a protected Nest response measured 15.85 req/s versus 77.73 req/s for the same unprotected projection. This is intentionally an oversized response, not a production capacity claim.
 
 Use pagination/cursors and bounded page sizes before optimizing a response this large. The [reproducible TypeORM, Express and Nest battery](https://github.com/ts-typed/ts-typed/blob/main/docs/performance.md) separates validation from deep protection and maps the current bottlenecks.
 
