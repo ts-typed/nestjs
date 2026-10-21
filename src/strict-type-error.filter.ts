@@ -1,6 +1,6 @@
 import type { ArgumentsHost, ExceptionFilter } from '@nestjs/common';
 import { Catch } from '@nestjs/common';
-import { StrictTypeError } from '@ts-typed/compiler';
+import { StrictTypeError } from '@ts-typed/core';
 import { StrictTypeHttpError } from './strict-type-http-error';
 
 interface MinimalHttpResponse {

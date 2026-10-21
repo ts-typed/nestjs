@@ -1,5 +1,5 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
-import type { StrictTypeError, StrictTypeErrorInfo } from '@ts-typed/compiler';
+import type { StrictTypeError, StrictTypeErrorInfo } from '@ts-typed/core';
 
 /**
  * A `return`/`resolve` violation means the function or method's OWN body
@@ -31,12 +31,12 @@ const SERVER_FAULT_CONTRACT_KINDS: ReadonlySet<string> = new Set(['variable']);
  * DTO populated by `class-transformer` from client input (a client fault) —
  * both go through the exact same `contractKind`/`operation` path. The app
  * breaks that tie explicitly by marking its Entity classes with
- * `ServerPopulated()` (from `@ts-typed/compiler`), which makes every
+ * `ServerPopulated()` (from `@ts-typed/core`), which makes every
  * `StrictTypeError` thrown for one of that class's fields carry
  * `isServerPopulated: true`.
  *
  * A field decorated with `TypeErrorResponse(message, status?)` (also from
- * `@ts-typed/compiler`) carries its own custom message — and optionally its
+ * `@ts-typed/core`) carries its own custom message — and optionally its
  * own status — on the thrown error, as `typeErrorResponseMessage`/
  * `typeErrorResponseStatus`. Neither is ever present in `toJSON()`'s output
  * (ts-typed deliberately keeps them off the generic serialized shape), so

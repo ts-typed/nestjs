@@ -6,7 +6,7 @@ import type {
   IntegrationAdapterV1,
   IntegrationContext,
   ProjectResolution,
-} from '@ts-typed/compiler';
+} from '@ts-typed/core';
 
 const API_VERSION = 1 as const;
 const NAME = 'nestjs';

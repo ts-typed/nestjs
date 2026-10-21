@@ -8,8 +8,8 @@ require('reflect-metadata');
 
 const { Controller, Get, Module, UseFilters } = require('@nestjs/common');
 const { NestFactory } = require('@nestjs/core');
-const { StrictTypeError, AggregateStrictTypeError } = require('@ts-typed/compiler');
-const { resolveProject: resolveCoreProject } = require('@ts-typed/compiler/integration');
+const { StrictTypeError, AggregateStrictTypeError } = require('@ts-typed/core');
+const { resolveProject: resolveCoreProject } = require('@ts-typed/core/integration');
 const {
   nestjsIntegrationAdapter,
   resolveProject,
