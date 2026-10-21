@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import * as ts from 'typescript';
 import type {
   GlobalErrorFilterSetupResult,
@@ -98,7 +98,11 @@ function resolveNestTsConfigPath(projectRoot: string): string | undefined {
 
   const config = readNestCliConfig(nestCliPath);
   const tsConfigPath = config?.compilerOptions?.tsConfigPath;
-  return tsConfigPath === undefined ? undefined : join(projectRoot, tsConfigPath);
+  return tsConfigPath === undefined
+    ? undefined
+    : isAbsolute(tsConfigPath)
+      ? tsConfigPath
+      : join(projectRoot, tsConfigPath);
 }
 
 function resolveNestBootstrapPath(projectRoot: string): string | undefined {
@@ -106,9 +110,18 @@ function resolveNestBootstrapPath(projectRoot: string): string | undefined {
   const sourceRoot = config?.sourceRoot ?? 'src';
   const bootstrapPath = resolve(projectRoot, sourceRoot, 'main.ts');
   const relativePath = relative(projectRoot, bootstrapPath);
-  return relativePath === '' || (!relativePath.startsWith('..') && !relativePath.includes('../'))
-    ? bootstrapPath
-    : undefined;
+  return relativePath === '' || !escapesRoot(relativePath) ? bootstrapPath : undefined;
+}
+
+/**
+ * Whether `relativePath` (as `relative()` returns it) climbs out of its
+ * base directory — a real `..` path SEGMENT, not merely two dots anywhere in
+ * the string. A `sourceRoot` naming a directory that itself starts with
+ * `..` (e.g. `"..x"`, a legal directory name) must not be mistaken for
+ * traversal.
+ */
+function escapesRoot(relativePath: string): boolean {
+  return relativePath.split(sep).some((segment) => segment === '..');
 }
 
 function readNestCliConfig(nestCliPath: string): NestCliConfig | undefined {
@@ -143,19 +156,23 @@ interface NestBootstrap {
   readonly statement: ts.VariableStatement;
 }
 
+/**
+ * Finds the file's `const <app> = await NestFactory.create(...)` bootstrap
+ * statement. More than one such statement (for example a conditional
+ * test-harness app alongside the real one) is ambiguous — which one actually
+ * gets listened on cannot be told apart by this syntactic scan — so this
+ * returns `undefined` rather than silently picking whichever one the walk
+ * happens to reach first, matching this module's documented "ambiguous
+ * projects are left untouched" rule.
+ */
 function findNestBootstrap(sourceFile: ts.SourceFile): NestBootstrap | undefined {
-  let result: NestBootstrap | undefined;
+  const results: NestBootstrap[] = [];
 
   const visit = (node: ts.Node): void => {
-    if (result !== undefined) {
-      return;
-    }
-
     if (ts.isVariableStatement(node)) {
       for (const declaration of node.declarationList.declarations) {
         if (ts.isIdentifier(declaration.name) && isNestFactoryCreate(declaration.initializer)) {
-          result = { applicationName: declaration.name.text, statement: node };
-          return;
+          results.push({ applicationName: declaration.name.text, statement: node });
         }
       }
     }
@@ -163,7 +180,7 @@ function findNestBootstrap(sourceFile: ts.SourceFile): NestBootstrap | undefined
   };
 
   visit(sourceFile);
-  return result;
+  return results.length === 1 ? results[0] : undefined;
 }
 
 function isNestFactoryCreate(initializer: ts.Expression | undefined): boolean {

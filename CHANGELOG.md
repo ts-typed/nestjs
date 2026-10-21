@@ -4,6 +4,28 @@ All notable changes to `@ts-typed/nestjs` are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.27] - 2026-10-21
+
+### Fixed
+
+- `installGlobalStrictTypeErrorFilter` picked whichever `NestFactory.create`
+  call its scan reached first, including one inside a conditional
+  test-harness branch — silently inserting the filter into the wrong
+  bootstrap and leaving the real production app unfiltered. More than one
+  such call in the file is now treated as ambiguous and left untouched,
+  consistent with this module's documented "ambiguous projects are left
+  untouched" rule.
+- An absolute `compilerOptions.tsConfigPath` in `nest-cli.json` was joined
+  under `projectRoot` instead of used as-is, producing a nonexistent path.
+- A `sourceRoot` naming a directory that legitimately starts with two dots
+  (e.g. `"..x"`) was rejected as if it escaped the project root, because the
+  check matched `..` as a text prefix/substring instead of a real path
+  segment.
+
+### Changed
+
+- Synced the `@ts-typed/compiler` peer/dev dependency to `0.1.35`.
+
 ## [0.1.26] - 2026-10-21
 
 ### Fixed

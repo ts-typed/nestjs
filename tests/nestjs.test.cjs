@@ -123,6 +123,76 @@ test('the Nest adapter does not mistake a comment mentioning StrictTypeErrorFilt
   assert.match(configured, /app\.useGlobalFilters\(new StrictTypeErrorFilter\(\)\);/);
 });
 
+test('resolveProject uses an absolute tsConfigPath as-is instead of joining it under projectRoot', () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'ts-typed-nest-abs-'));
+  const absoluteTsConfig = join(tmpdir(), 'shared-tsconfig.build.json');
+  writeFileSync(join(projectRoot, 'nest-cli.json'), JSON.stringify({ compilerOptions: { tsConfigPath: absoluteTsConfig } }));
+
+  assert.deepEqual(resolveProject({ projectRoot }), {
+    apiVersion: 1,
+    integration: 'nestjs',
+    projectRoot,
+    configPath: absoluteTsConfig,
+  });
+});
+
+test('the Nest adapter does not reject a sourceRoot directory literally named with leading dots', () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'ts-typed-nest-dotdir-'));
+  const sourceRoot = join(projectRoot, '..x');
+  require('node:fs').mkdirSync(sourceRoot, { recursive: true });
+  writeFileSync(join(projectRoot, 'nest-cli.json'), JSON.stringify({ sourceRoot: '..x' }));
+  const mainPath = join(sourceRoot, 'main.ts');
+  writeFileSync(
+    mainPath,
+    [
+      "import { NestFactory } from '@nestjs/core';",
+      "import { AppModule } from './app.module';",
+      '',
+      'async function bootstrap(): Promise<void> {',
+      '  const app = await NestFactory.create(AppModule);',
+      '  await app.listen(process.env.PORT ?? 3000);',
+      '}',
+      'void bootstrap();',
+      '',
+    ].join('\n'),
+  );
+
+  const result = nestjsIntegrationAdapter.installGlobalStrictTypeErrorFilter({ projectRoot });
+
+  assert.equal(result.changed, true);
+});
+
+test('the Nest adapter leaves an ambiguous bootstrap (more than one NestFactory.create) untouched', () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'ts-typed-nest-ambiguous-'));
+  const sourceRoot = join(projectRoot, 'src');
+  require('node:fs').mkdirSync(sourceRoot, { recursive: true });
+  writeFileSync(join(projectRoot, 'nest-cli.json'), JSON.stringify({ sourceRoot: 'src' }));
+  const mainPath = join(sourceRoot, 'main.ts');
+  const original = [
+    "import { NestFactory } from '@nestjs/core';",
+    "import { AppModule } from './app.module';",
+    "import { TestModule } from './test.module';",
+    '',
+    'async function bootstrap(): Promise<void> {',
+    '  if (process.env.TEST_HARNESS) {',
+    '    const testApp = await NestFactory.create(TestModule);',
+    '    await testApp.listen(0);',
+    '    return;',
+    '  }',
+    '  const app = await NestFactory.create(AppModule);',
+    '  await app.listen(process.env.PORT ?? 3000);',
+    '}',
+    'void bootstrap();',
+    '',
+  ].join('\n');
+  writeFileSync(mainPath, original);
+
+  const result = nestjsIntegrationAdapter.installGlobalStrictTypeErrorFilter({ projectRoot });
+
+  assert.equal(result.changed, false);
+  assert.equal(require('node:fs').readFileSync(mainPath, 'utf8'), original);
+});
+
 test('the Nest adapter recognizes an already-registered filter imported under an alias', () => {
   const projectRoot = mkdtempSync(join(tmpdir(), 'ts-typed-nest-alias-'));
   const sourceRoot = join(projectRoot, 'src');
