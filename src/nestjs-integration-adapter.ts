@@ -55,14 +55,15 @@ export function installGlobalStrictTypeErrorFilter(
   }
 
   const source = readFileSync(mainPath, 'utf8');
-  if (source.includes('StrictTypeErrorFilter') && source.includes('.useGlobalFilters(')) {
+  const sourceFile = ts.createSourceFile(mainPath, source, ts.ScriptTarget.Latest, true);
+  const importedLocalName = filterImportLocalName(sourceFile);
+  if (importedLocalName !== undefined && hasUseGlobalFiltersCall(sourceFile, importedLocalName)) {
     return {
       changed: false,
       message: `StrictTypeErrorFilter is already registered globally in ${relative(context.projectRoot, mainPath)}.`,
     };
   }
 
-  const sourceFile = ts.createSourceFile(mainPath, source, ts.ScriptTarget.Latest, true);
   const bootstrap = findNestBootstrap(sourceFile);
   if (bootstrap === undefined) {
     return {
@@ -74,7 +75,7 @@ export function installGlobalStrictTypeErrorFilter(
   const filterCall = `\n${indentationBefore(source, bootstrap.statement.getStart(sourceFile))}${bootstrap.applicationName}.useGlobalFilters(new StrictTypeErrorFilter());`;
   let updated = `${source.slice(0, bootstrap.statement.end)}${filterCall}${source.slice(bootstrap.statement.end)}`;
 
-  if (!hasFilterImport(sourceFile)) {
+  if (filterImportLocalName(sourceFile) === undefined) {
     const importEnd = lastImportEnd(sourceFile);
     const importStatement = importEnd === 0
       ? "import { StrictTypeErrorFilter } from '@ts-typed/nestjs';\n"
@@ -120,7 +121,21 @@ function readNestCliConfig(nestCliPath: string): NestCliConfig | undefined {
 }
 
 function isNestCliConfig(value: unknown): value is NestCliConfig {
-  return typeof value === 'object' && value !== null;
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  if (record.sourceRoot !== undefined && typeof record.sourceRoot !== 'string') {
+    return false;
+  }
+  if (record.compilerOptions === undefined) {
+    return true;
+  }
+  if (typeof record.compilerOptions !== 'object' || record.compilerOptions === null) {
+    return false;
+  }
+  const tsConfigPath = (record.compilerOptions as Record<string, unknown>).tsConfigPath;
+  return tsConfigPath === undefined || typeof tsConfigPath === 'string';
 }
 
 interface NestBootstrap {
@@ -169,19 +184,65 @@ function indentationBefore(source: string, position: number): string {
   return /^[\t ]*$/.test(prefix) ? prefix : '';
 }
 
-function hasFilterImport(sourceFile: ts.SourceFile): boolean {
-  return sourceFile.statements.some((statement) => {
+/**
+ * The local binding name `StrictTypeErrorFilter` is imported under, honoring
+ * a rename (`import { StrictTypeErrorFilter as F }`), or `undefined` if the
+ * file has no such import from `@ts-typed/nestjs` yet.
+ */
+function filterImportLocalName(sourceFile: ts.SourceFile): string | undefined {
+  for (const statement of sourceFile.statements) {
     if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
-      return false;
+      continue;
     }
     if (statement.moduleSpecifier.text !== '@ts-typed/nestjs') {
-      return false;
+      continue;
     }
     const bindings = statement.importClause?.namedBindings;
-    return bindings !== undefined
-      && ts.isNamedImports(bindings)
-      && bindings.elements.some((element) => element.name.text === 'StrictTypeErrorFilter');
-  });
+    if (bindings === undefined || !ts.isNamedImports(bindings)) {
+      continue;
+    }
+    const element = bindings.elements.find(
+      (candidate) => (candidate.propertyName ?? candidate.name).text === 'StrictTypeErrorFilter',
+    );
+    if (element !== undefined) {
+      return element.name.text;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Whether the source already calls `<app>.useGlobalFilters(new <localName>())`
+ * anywhere — an AST check (not a text search), so a comment or string
+ * mentioning `StrictTypeErrorFilter` can never produce a false positive that
+ * skips registering the filter.
+ */
+function hasUseGlobalFiltersCall(sourceFile: ts.SourceFile, localName: string): boolean {
+  let found = false;
+
+  const visit = (node: ts.Node): void => {
+    if (found) {
+      return;
+    }
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === 'useGlobalFilters' &&
+      node.arguments.some(
+        (argument) =>
+          ts.isNewExpression(argument) &&
+          ts.isIdentifier(argument.expression) &&
+          argument.expression.text === localName,
+      )
+    ) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  return found;
 }
 
 function lastImportEnd(sourceFile: ts.SourceFile): number {

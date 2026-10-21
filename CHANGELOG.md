@@ -4,6 +4,31 @@ All notable changes to `@ts-typed/nestjs` are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.26] - 2026-10-21
+
+### Fixed
+
+- `installGlobalStrictTypeErrorFilter` threw a raw `TypeError` (instead of
+  falling back to the default, as malformed JSON already did) when
+  `nest-cli.json` had a non-string `sourceRoot` or
+  `compilerOptions.tsConfigPath`.
+- The "already registered" check for the global filter matched any text
+  containing `StrictTypeErrorFilter` and `.useGlobalFilters(` anywhere in
+  `main.ts`, including comments and unrelated strings, which could skip
+  registering the filter entirely. It is now an AST check for an actual
+  `<app>.useGlobalFilters(new StrictTypeErrorFilter())` call (honoring an
+  aliased import too), so a comment can never produce a false positive.
+
+### Changed
+
+- **`@ts-typed/compiler` moved from a pinned `dependencies` entry to a
+  `peerDependencies` range (`>=0.1.34 <0.2`)**, with `0.1.34` as a
+  `devDependencies` pin for local builds/tests. Every prior release bumped an
+  exact `dependencies` version to keep `StrictTypeErrorFilter` on the same
+  compiler runtime identity as the host application — this removes the need
+  to republish on every compiler patch, the same structural fix
+  `@ts-typed/express` applied in `fix: share compiler runtime as peer dependency`.
+
 ## [0.1.25] - 2026-10-20
 
 ### Fixed

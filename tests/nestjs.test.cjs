@@ -80,6 +80,82 @@ test('the Nest adapter safely registers the global filter once in a conventional
   });
 });
 
+test('resolveProject falls back to defaults instead of crashing on a malformed nest-cli.json', () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'ts-typed-nest-malformed-'));
+  writeFileSync(
+    join(projectRoot, 'nest-cli.json'),
+    JSON.stringify({ sourceRoot: 7, compilerOptions: { tsConfigPath: null } }),
+  );
+
+  assert.deepEqual(resolveProject({ projectRoot }), {
+    apiVersion: 1,
+    integration: 'nestjs',
+    projectRoot,
+  });
+});
+
+test('the Nest adapter does not mistake a comment mentioning StrictTypeErrorFilter for an existing registration', () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'ts-typed-nest-comment-'));
+  const sourceRoot = join(projectRoot, 'src');
+  require('node:fs').mkdirSync(sourceRoot, { recursive: true });
+  writeFileSync(join(projectRoot, 'nest-cli.json'), JSON.stringify({ sourceRoot: 'src' }));
+  const mainPath = join(sourceRoot, 'main.ts');
+  writeFileSync(
+    mainPath,
+    [
+      "import { NestFactory } from '@nestjs/core';",
+      "import { AppModule } from './app.module';",
+      '',
+      '// TODO: register StrictTypeErrorFilter and app.useGlobalFilters( later',
+      'async function bootstrap(): Promise<void> {',
+      '  const app = await NestFactory.create(AppModule);',
+      '  await app.listen(process.env.PORT ?? 3000);',
+      '}',
+      'void bootstrap();',
+      '',
+    ].join('\n'),
+  );
+
+  const result = nestjsIntegrationAdapter.installGlobalStrictTypeErrorFilter({ projectRoot });
+
+  assert.equal(result.changed, true);
+  const configured = require('node:fs').readFileSync(mainPath, 'utf8');
+  assert.match(configured, /app\.useGlobalFilters\(new StrictTypeErrorFilter\(\)\);/);
+});
+
+test('the Nest adapter recognizes an already-registered filter imported under an alias', () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'ts-typed-nest-alias-'));
+  const sourceRoot = join(projectRoot, 'src');
+  require('node:fs').mkdirSync(sourceRoot, { recursive: true });
+  writeFileSync(join(projectRoot, 'nest-cli.json'), JSON.stringify({ sourceRoot: 'src' }));
+  const mainPath = join(sourceRoot, 'main.ts');
+  writeFileSync(
+    mainPath,
+    [
+      "import { NestFactory } from '@nestjs/core';",
+      "import { StrictTypeErrorFilter as F } from '@ts-typed/nestjs';",
+      "import { AppModule } from './app.module';",
+      '',
+      'async function bootstrap(): Promise<void> {',
+      '  const app = await NestFactory.create(AppModule);',
+      '  app.useGlobalFilters(new F());',
+      '  await app.listen(process.env.PORT ?? 3000);',
+      '}',
+      'void bootstrap();',
+      '',
+    ].join('\n'),
+  );
+  const before = require('node:fs').readFileSync(mainPath, 'utf8');
+
+  const result = nestjsIntegrationAdapter.installGlobalStrictTypeErrorFilter({ projectRoot });
+
+  assert.deepEqual(result, {
+    changed: false,
+    message: 'StrictTypeErrorFilter is already registered globally in src/main.ts.',
+  });
+  assert.equal(require('node:fs').readFileSync(mainPath, 'utf8'), before);
+});
+
 test('the published Nest package is loadable as the configured integration module', () => {
   // One level up from tests/ is this package's own root (package.json names
   // "@ts-typed/nestjs" and has "exports"), so Node's self-reference
