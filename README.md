@@ -1,6 +1,20 @@
+<p align="center">
+  <a href="https://ts-typed.com" target="_blank" rel="noopener noreferrer">
+    <img src=".github/logo.svg" alt="ts-typed" width="260" />
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@ts-typed/nestjs"><img src="https://img.shields.io/npm/v/@ts-typed/nestjs.svg" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/@ts-typed/nestjs"><img src="https://img.shields.io/npm/dm/@ts-typed/nestjs.svg" alt="npm downloads"></a>
+  <a href="https://github.com/ts-typed/nestjs/actions/workflows/ci.yml"><img src="https://github.com/ts-typed/nestjs/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/node-%3E%3D18-339933?logo=node.js&logoColor=white" alt="Node >=18">
+  <a href="https://github.com/ts-typed/nestjs/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License"></a>
+</p>
+
 # @ts-typed/nestjs
 
-NestJS integration for [`@ts-typed/compiler`](https://www.npmjs.com/package/@ts-typed/compiler): translates a runtime contract violation (a `StrictTypeError`) into an HTTP response, with a per-property escape hatch for custom messages that can replace a lot of what `class-validator` is normally used for.
+NestJS integration for [`@ts-typed/core`](https://www.npmjs.com/package/@ts-typed/core): translates a runtime contract violation (a `StrictTypeError`) into an HTTP response, with a per-property escape hatch for custom messages that can replace a lot of what `class-validator` is normally used for.
 
 ```bash
 npm install @ts-typed/nestjs
@@ -44,7 +58,7 @@ It does not replace Nest's own validation pipes or instantiate DTOs — it only 
 A class field (`contractKind: 'property'`) looks identical whether it's a TypeORM Entity reading corrupted data back from the database (a server fault) or a DTO populated by `class-transformer` from client input (a client fault) — both go through the exact same path. Mark your Entity classes to break the tie:
 
 ```ts
-import { ServerPopulated } from '@ts-typed/nestjs'; // re-exported from @ts-typed/compiler
+import { ServerPopulated } from '@ts-typed/nestjs'; // re-exported from @ts-typed/core
 import { Entity, Column } from 'typeorm';
 
 @Entity({ name: 'todos' })
@@ -60,7 +74,7 @@ A corrupted `status` value read back from the database now answers `500`; the sa
 ## `TypeErrorResponse()` — a per-field alternative to class-validator
 
 ```ts
-import { TypeErrorResponse } from '@ts-typed/nestjs'; // re-exported from @ts-typed/compiler
+import { TypeErrorResponse } from '@ts-typed/nestjs'; // re-exported from @ts-typed/core
 
 export class CreateUserDto {
   @TypeErrorResponse('Email inválido', 422)
@@ -82,7 +96,7 @@ This is a **single-violation** mechanism, consistent with the rest of ts-typed: 
 ```ts
 import { Catch } from '@nestjs/common';
 import type { ArgumentsHost, ExceptionFilter } from '@nestjs/common';
-import { StrictTypeError } from '@ts-typed/compiler';
+import { StrictTypeError } from '@ts-typed/core';
 import { StrictTypeHttpError } from '@ts-typed/nestjs';
 
 @Catch(StrictTypeError)
@@ -165,7 +179,7 @@ Use pagination/cursors and bounded page sizes before optimizing a response this 
 ## Known limitations
 
 - **Aggregation is opt-in and class-scoped.** By default ts-typed is fail-fast. `AggregateErrors()` on a DTO class collects multiple violations at the parameter boundary and on eligible field writes, and the filter renders the resulting aggregate error. It is not a global replacement for every `class-validator` workflow; see the compiler README for its boundary and lifecycle rules.
-- See [`@ts-typed/compiler`'s README](https://www.npmjs.com/package/@ts-typed/compiler) for the underlying library's own scope boundaries (inferred generics, `WeakMap`/`WeakSet`, etc.) — anything not validated there has nothing for this package's filter to react to either.
+- See [`@ts-typed/core`'s README](https://www.npmjs.com/package/@ts-typed/core) for the underlying library's own scope boundaries (inferred generics, `WeakMap`/`WeakSet`, etc.) — anything not validated there has nothing for this package's filter to react to either.
 
 ## License
 
