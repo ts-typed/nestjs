@@ -6,9 +6,16 @@ const test = require('node:test');
 
 require('reflect-metadata');
 
-const { Controller, Get, Module, UseFilters } = require('@nestjs/common');
+const { Body, Controller, Get, Module, Post, UseFilters } = require('@nestjs/common');
 const { NestFactory } = require('@nestjs/core');
-const { StrictTypeError, AggregateStrictTypeError } = require('@ts-typed/core');
+const {
+  AggregateErrors,
+  AggregateStrictTypeError,
+  StrictTypeError,
+  beginAggregateWindow,
+  collectIfAggregating,
+  takeAggregateWindowViolations,
+} = require('@ts-typed/core');
 const { resolveProject: resolveCoreProject } = require('@ts-typed/core/integration');
 const {
   nestjsIntegrationAdapter,
@@ -787,4 +794,108 @@ test('a real Nest HTTP route returns every collected violation for an @Aggregate
     body.errors.map((error) => error.propertyPath),
     ['CreateUserDto.name', 'CreateUserDto.age'],
   );
+});
+
+// C1 regression: an @AggregateErrors() instance used to be auto-closed by
+// queueMicrotask, which always won the race against a real parameter
+// crossing happening after an `await` — exactly NestJS's ValidationPipe
+// shape (plainToInstance, then `await this.validate(...)`, then the
+// controller method is invoked with the bound argument). This test builds
+// a custom pipe with that exact shape (construct + populate a window, then
+// an async gap with two real await points) in front of a real Nest HTTP
+// route, and confirms both: (1) the controller still receives the dto with
+// its buffered violations intact and the real crossing still throws
+// synchronously with the right violations, surfaced as a 400 through
+// StrictTypeErrorFilter, and (2) nothing throws asynchronously/unhandled —
+// which is exactly the failure mode C1 fixed (the pre-fix queueMicrotask
+// auto-close would have closed the window before the controller ever saw
+// it, and thrown AggregateStrictTypeError asynchronously with no
+// synchronous catcher).
+test('a real Nest HTTP route survives an async gap (mirroring ValidationPipe.transform) between DTO construction and the real parameter crossing, with no unhandled async throw (C1 regression)', async (t) => {
+  class CreateUserDto {
+    constructor() {
+      this.name = '';
+      this.age = 0;
+    }
+  }
+  AggregateErrors()(CreateUserDto);
+
+  class AggregateValidationPipe {
+    async transform(value) {
+      const instance = new CreateUserDto();
+      beginAggregateWindow(instance);
+      // Simulates plainToInstance's raw-payload population: a bad field is
+      // collected (not thrown), exactly what the real guarded setters do
+      // while a window is open.
+      if (typeof value.name === 'string') {
+        instance.name = value.name;
+      } else {
+        collectIfAggregating(instance, {
+          code: 'TYPE_MISMATCH',
+          contractKind: 'parameter',
+          propertyPath: 'CreateUserDto.name',
+          expected: 'string',
+          received: typeof value.name,
+          operation: 'argument',
+        });
+      }
+      // The async gap: ValidationPipe.transform does `plainToInstance(...)`
+      // then `await this.validate(...)` before the controller method ever
+      // runs. Two real await points (a resolved promise and a macrotask) to
+      // make sure the gap outlives at least one full microtask-queue drain
+      // — the exact condition under which the old queueMicrotask auto-close
+      // would have already closed (and thrown for) this window.
+      await Promise.resolve();
+      await new Promise((resolve) => setImmediate(resolve));
+      return instance;
+    }
+  }
+  const pipe = new AggregateValidationPipe();
+
+  let uncaught;
+  const onUncaught = (err) => {
+    uncaught = err;
+  };
+  process.once('uncaughtException', onUncaught);
+
+  class TestController {
+    reject(dto) {
+      // The real parameter crossing, synchronous, after the pipe resolved.
+      const violations = takeAggregateWindowViolations(dto);
+      if (violations !== undefined && violations.length > 0) {
+        throw new AggregateStrictTypeError(violations);
+      }
+      return dto;
+    }
+  }
+  Controller('typed')(TestController);
+  const descriptor = Object.getOwnPropertyDescriptor(TestController.prototype, 'reject');
+  Post('reject')(TestController.prototype, 'reject', descriptor);
+  Body(pipe)(TestController.prototype, 'reject', 0);
+  UseFilters(StrictTypeErrorFilter)(TestController.prototype, 'reject', descriptor);
+
+  class TestModule {}
+  Module({ controllers: [TestController] })(TestModule);
+
+  const application = await NestFactory.create(TestModule, { logger: false });
+  t.after(async () => application.close());
+  await application.listen(0, '127.0.0.1');
+  const address = application.getHttpServer().address();
+
+  const response = await fetch(`http://127.0.0.1:${address.port}/typed/reject`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name: 42, age: 30 }),
+  });
+
+  assert.equal(response.status, 400);
+  const body = await response.json();
+  assert.equal(body.errors.length, 1);
+  assert.equal(body.errors[0].propertyPath, 'CreateUserDto.name');
+
+  // Give any stray async throw (the C1 failure mode) a chance to surface
+  // before we check for it.
+  await new Promise((resolve) => setImmediate(resolve));
+  process.removeListener('uncaughtException', onUncaught);
+  assert.equal(uncaught, undefined, `an unhandled async error was thrown: ${uncaught?.stack}`);
 });
