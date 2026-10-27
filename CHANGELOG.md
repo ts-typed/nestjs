@@ -4,6 +4,17 @@ All notable changes to `@ts-typed/nestjs` are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.30] - 2026-10-27
+
+### Changed
+
+- Bumped the `@ts-typed/core` peer/dev dependency to `0.2.0`. The previous
+  published peer range (`>=0.1.36 <0.2`) was never republished when the
+  peer dep was last updated in source (0.1.29 already carried `TypedValidationPipe`
+  and the compiler sync, but the package's own version was not bumped), so
+  `npm install` kept pulling an incompatible pair and risked a
+  dual-module-instance of `@ts-typed/core`.
+
 ## [0.1.27] - 2026-10-21
 
 ### Fixed
