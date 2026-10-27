@@ -11,6 +11,7 @@ const { NestFactory } = require('@nestjs/core');
 const {
   AggregateErrors,
   AggregateStrictTypeError,
+  ArrayAggregateStrictTypeError,
   StrictTypeError,
   beginAggregateWindow,
   collectIfAggregating,
@@ -898,4 +899,103 @@ test('a real Nest HTTP route survives an async gap (mirroring ValidationPipe.tra
   await new Promise((resolve) => setImmediate(resolve));
   process.removeListener('uncaughtException', onUncaught);
   assert.equal(uncaught, undefined, `an unhandled async error was thrown: ${uncaught?.stack}`);
+});
+
+// I3 follow-up: the C1 test above only covers the single-DTO async-gap
+// timing race. It never actually drove an ArrayAggregateStrictTypeError
+// through StrictTypeErrorFilter, so the brief's requirement that per-element
+// `elementIndex` survives into the HTTP response body (via toJSON()) went
+// unverified. This test triggers a real array-of-DTOs validation failure
+// (a `dtos: CreateUserDto[]`-style parameter) and asserts the JSON body
+// carries each invalid element's real elementIndex.
+test('a real Nest HTTP route surfaces ArrayAggregateStrictTypeError through StrictTypeErrorFilter, with each invalid element\'s elementIndex present in the JSON response body', async (t) => {
+  class CreateUserDto {
+    constructor() {
+      this.name = '';
+    }
+  }
+  AggregateErrors()(CreateUserDto);
+
+  class ArrayAggregateValidationPipe {
+    async transform(value) {
+      // Mirrors plainToInstance populating an array of DTO instances, one
+      // aggregate window per element, before the real parameter crossing.
+      const instances = value.map((item) => {
+        const instance = new CreateUserDto();
+        beginAggregateWindow(instance);
+        if (typeof item.name === 'string') {
+          instance.name = item.name;
+        } else {
+          collectIfAggregating(instance, {
+            code: 'TYPE_MISMATCH',
+            contractKind: 'parameter',
+            propertyPath: 'name',
+            expected: 'string',
+            received: typeof item.name,
+            operation: 'argument',
+          });
+        }
+        return instance;
+      });
+      // An async gap, same shape as the C1 test, before the controller
+      // method (the real parameter crossing) ever runs.
+      await Promise.resolve();
+      await new Promise((resolve) => setImmediate(resolve));
+      return instances;
+    }
+  }
+  const pipe = new ArrayAggregateValidationPipe();
+
+  class TestController {
+    rejectArray(dtos) {
+      // The real parameter crossing: take each element's window, and for
+      // every element that collected violations, wrap it in an
+      // AggregateStrictTypeError carrying its real original array index.
+      const elementErrors = dtos
+        .map((dto, index) => {
+          const violations = takeAggregateWindowViolations(dto);
+          if (violations === undefined || violations.length === 0) {
+            return undefined;
+          }
+          return new AggregateStrictTypeError(violations, index);
+        })
+        .filter((error) => error !== undefined);
+
+      if (elementErrors.length > 0) {
+        throw new ArrayAggregateStrictTypeError(elementErrors);
+      }
+      return dtos;
+    }
+  }
+  Controller('typed')(TestController);
+  const descriptor = Object.getOwnPropertyDescriptor(TestController.prototype, 'rejectArray');
+  Post('reject-array')(TestController.prototype, 'rejectArray', descriptor);
+  Body(pipe)(TestController.prototype, 'rejectArray', 0);
+  UseFilters(StrictTypeErrorFilter)(TestController.prototype, 'rejectArray', descriptor);
+
+  class TestModule {}
+  Module({ controllers: [TestController] })(TestModule);
+
+  const application = await NestFactory.create(TestModule, { logger: false });
+  t.after(async () => application.close());
+  await application.listen(0, '127.0.0.1');
+  const address = application.getHttpServer().address();
+
+  const response = await fetch(`http://127.0.0.1:${address.port}/typed/reject-array`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify([{ name: 'ok' }, { name: 42 }, { name: 7 }]),
+  });
+
+  assert.equal(response.status, 400);
+  const body = await response.json();
+  assert.equal(body.errors.length, 2);
+  assert.deepEqual(
+    body.errors.map((error) => error.elementIndex),
+    [1, 2],
+  );
+  assert.deepEqual(
+    body.errors.map((error) => error.errors[0].propertyPath),
+    ['name', 'name'],
+  );
 });
