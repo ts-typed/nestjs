@@ -4,6 +4,18 @@ All notable changes to `@ts-typed/nestjs` are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.32] - 2026-10-28
+
+### Changed
+
+- Bumped the `@ts-typed/core` peer/dev dependency to `0.4.0`. That release
+  resolves `instanceof` across files for `compiler.strictClass`/`@StrictClass()`
+  (when the class is imported by name) and flips `compiler.strictClass`'s
+  global default to `true` (breaking). DTOs validated as class-typed
+  contracts are now checked by `instanceof` by default instead of
+  structurally; set `compiler.strictClass: false` or decorate with
+  `@StructuralClass()` to keep the previous behavior.
+
 ## [0.1.31] - 2026-10-27
 
 ### Changed
