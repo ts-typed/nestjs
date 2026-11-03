@@ -4,6 +4,17 @@ All notable changes to `@ts-typed/nestjs` are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.33] - 2026-11-03
+
+### Changed
+
+- Bumped the `@ts-typed/core` peer/dev dependency to `0.7.0`. This range was
+  never advanced through `0.5.0`/`0.6.0`; it now jumps straight to `0.7.0`,
+  which adds ranged `Int`/`Float`/`Str` types, compiled-validator codegen,
+  lazy guards, cross-file schema memoization, and closes 4 previously
+  documented limitations (see `@ts-typed/core`'s own CHANGELOG for details).
+  No behavior change in this package itself.
+
 ## [0.1.32] - 2026-10-28
 
 ### Changed
