@@ -11,11 +11,10 @@ const { NestFactory } = require('@nestjs/core');
 const { installFieldGuard, lockReadonlyField, StrictTypeError } = require('@ts-typed/core');
 const { StrictTypeErrorFilter, TypedValidationPipe } = require('../dist');
 
-// Simulates what ts-typed's real compiler-generated constructor does for a
-// `readonly` field: install the guard, write the initializer, then lock it —
-// but deferring the lock the same way the real generated code is documented
-// to, by checking the deferred-lock queue. Here we drive that directly
-// through TypedValidationPipe's real transform() instead of a compiled DTO.
+// Hand-written stand-in for the constructor ts-typed's compiler emits for
+// `readonly name = ''`. These runtime calls are what the compiler would emit;
+// `lockReadonlyField` itself defers when called inside `withDeferredReadonlyLock`,
+// which is what `TypedValidationPipe` wraps around `transform()`.
 class CreateUserDto {
   constructor() {
     this.name = '';
@@ -61,10 +60,16 @@ test('TypedValidationPipe still rejects invalid input the same way the base Vali
 test('a real Nest HTTP route using TypedValidationPipe accepts a valid body and the readonly field is already locked in the handler', async (t) => {
   class TestController {
     create(dto) {
+      try {
+        dto.name = 'x';
+      } catch (err) {
+        return { received: dto.name, lockedCode: err?.code };
+      }
       return { received: dto.name };
     }
   }
   Controller('users')(TestController);
+  // Plain JS has no `emitDecoratorMetadata`; without this, Nest passes `metatype: undefined` and `ValidationPipe` skips transform/validation entirely.
   Reflect.defineMetadata('design:paramtypes', [CreateUserDto], TestController.prototype, 'create');
   const descriptor = Object.getOwnPropertyDescriptor(TestController.prototype, 'create');
   Post()(TestController.prototype, 'create', descriptor);
@@ -87,7 +92,7 @@ test('a real Nest HTTP route using TypedValidationPipe accepts a valid body and 
 
   assert.equal(response.status, 201);
   const body = await response.json();
-  assert.deepEqual(body, { received: 'Patrick' });
+  assert.deepEqual(body, { received: 'Patrick', lockedCode: 'READONLY_PROPERTY' });
 });
 
 test('a real Nest HTTP route using TypedValidationPipe returns 400 for an invalid body, via class-validator, without an unhandled async throw', async (t) => {
@@ -97,6 +102,7 @@ test('a real Nest HTTP route using TypedValidationPipe returns 400 for an invali
     }
   }
   Controller('users-invalid')(TestController);
+  // Plain JS has no `emitDecoratorMetadata`; without this, Nest passes `metatype: undefined` and `ValidationPipe` skips transform/validation entirely.
   Reflect.defineMetadata('design:paramtypes', [CreateUserDto], TestController.prototype, 'create');
   const descriptor = Object.getOwnPropertyDescriptor(TestController.prototype, 'create');
   Post()(TestController.prototype, 'create', descriptor);
